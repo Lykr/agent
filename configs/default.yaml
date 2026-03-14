@@ -1,0 +1,45 @@
+# Agent 默认配置
+
+agent:
+  name: "TeachingAgent"
+  max_steps: 10
+  temperature: 0.7
+  max_tokens: 2000
+  enable_reflection: false
+  enable_planning: false
+
+llm:
+  provider: "deepseek"
+  model: "deepseek-chat"
+  base_url: "https://api.deepseek.com"
+  timeout: 30
+  max_retries: 3
+
+memory:
+  short_term:
+    enabled: true
+    max_history: 10
+    compression: false
+  long_term:
+    enabled: false
+    vector_db_provider: "chroma"
+    persist_path: "./data/memory"
+    embedding_model: "all-MiniLM-L6-v2"
+
+tools:
+  timeout: 30
+  safe_mode: true
+  allowed_directories:
+    - "./data"
+    - "./examples"
+  blocked_commands:
+    - "rm"
+    - "format"
+    - "shutdown"
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "./logs/agent.log"
+  max_size: 10485760  # 10MB
+  backup_count: 5

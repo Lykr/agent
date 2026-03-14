@@ -1,0 +1,229 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+# uv-specific optimizations
+[tool.uv.sources]
+# Source configuration
+pypi = { url = "https://pypi.org/simple/" }
+
+[project]
+name = "agent"
+version = "0.1.0"
+description = "A teaching-oriented AI Agent framework for learning AI Agent concepts"
+readme = "README.md"
+authors = [
+    {name = "Lykr", email = ""},
+]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+requires-python = ">=3.9"
+dependencies = [
+    # Core dependencies
+    "pydantic>=2.5.0",
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+
+    # Async support
+    "anyio>=4.0.0",
+    "httpx>=0.25.0",
+
+    # Utilities
+    "loguru>=0.7.0",  # Better logging
+    "click>=8.1.0",   # CLI framework
+    "typing-extensions>=4.8.0",
+
+    # Configuration
+    "pyyaml>=6.0",    # YAML support
+]
+
+[project.optional-dependencies]
+# AI/ML dependencies
+llm = [
+    "openai>=1.0.0",      # OpenAI API
+    "anthropic>=0.25.0",  # Anthropic Claude API
+    "cohere>=5.0.0",      # Cohere API
+]
+
+# Vector databases
+vector-db = [
+    "chromadb>=0.4.0",    # ChromaDB
+    "qdrant-client>=1.6.0", # Qdrant
+    "pinecone-client>=3.0.0", # Pinecone
+]
+
+# Async support
+async = [
+    "anyio>=4.0.0",
+    "httpx>=0.25.0",
+    "asyncio>=3.4.3",
+]
+
+# UI/CLI enhancements
+ui = [
+    "rich>=13.0.0",       # Rich terminal output
+    "typer>=0.9.0",       # Modern CLI framework
+    "questionary>=2.0.0", # Interactive prompts
+]
+
+# Development dependencies
+dev = [
+    # Testing
+    "pytest>=7.4.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-xdist>=3.5.0",  # Parallel testing
+
+    # Code quality
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.6.0",
+    "pre-commit>=3.5.0",
+
+    # Documentation
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.4.0",
+    "mkdocstrings[python]>=0.23.0",
+
+    # Development tools
+    "ipython>=8.0.0",
+    "jupyter>=1.0.0",
+    "watchfiles>=0.21.0",  # File watching for auto-reload
+]
+
+# All dependencies (for easy installation)
+all = [
+    "openai>=1.0.0",
+    "anthropic>=0.25.0",
+    "cohere>=5.0.0",
+    "chromadb>=0.4.0",
+    "qdrant-client>=1.6.0",
+    "pinecone-client>=3.0.0",
+    "anyio>=4.0.0",
+    "httpx>=0.25.0",
+    "asyncio>=3.4.3",
+    "rich>=13.0.0",
+    "typer>=0.9.0",
+    "questionary>=2.0.0",
+    "pytest>=7.4.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-xdist>=3.5.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.6.0",
+    "pre-commit>=3.5.0",
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.4.0",
+    "mkdocstrings[python]>=0.23.0",
+    "ipython>=8.0.0",
+    "jupyter>=1.0.0",
+    "watchfiles>=0.21.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Lykr/agent"
+Repository = "https://github.com/Lykr/agent"
+Issues = "https://github.com/Lykr/agent/issues"
+
+# Hatch configuration
+[tool.hatch.build]
+include = [
+    "src/agent",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent"]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.envs.default]
+dependencies = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.hatch.envs.default.scripts]
+test = "pytest"
+test-cov = "pytest --cov=src/agent --cov-report=term-missing"
+lint = "ruff check src tests"
+format = "black src tests && ruff check src tests --fix"
+type-check = "mypy src"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "YTT", # flake8-2020
+    "RUF", # Ruff-specific rules
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.lint]
+# Enable pyupgrade rules
+pyupgrade = { keep-runtime-typing = true }
+
+# Enable flake8-2020
+flake8-2020 = true
+
+# Enable isort
+isort = { known-first-party = ["agent"] }
+
+[tool.ruff.format]
+# Use black-compatible formatting
+quote-style = "double"
+indent-style = "space"
+indent-width = 4
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+]
+
+[project.scripts]
+agent = "agent.cli:main"

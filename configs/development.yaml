@@ -1,0 +1,32 @@
+# 开发环境配置
+
+agent:
+  name: "DevAgent"
+  max_steps: 5  # 开发时减少步骤数
+  temperature: 0.8  # 更高的创造性
+  enable_debug: true
+  verbose: true
+
+llm:
+  provider: "mock"  # 开发时使用模拟LLM
+  mock_responses:
+    - "这是一个模拟响应。"
+    - "我理解了你的请求。"
+    - "让我来处理这个任务。"
+
+memory:
+  short_term:
+    enabled: true
+    max_history: 5
+  long_term:
+    enabled: false  # 开发时禁用长期记忆
+
+tools:
+  safe_mode: true
+  timeout: 10  # 开发时缩短超时时间
+  enable_logging: true
+
+logging:
+  level: "DEBUG"
+  console: true
+  file: false  # 开发时不写入文件
