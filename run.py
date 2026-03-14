@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from src.agent.core.agent import Agent
 from src.agent.llm.deepseek import DeepSeekLLM
 from src.agent.tools.file_tools import FileToolsFactory
+from src.agent.tools.memory_tools import MEMORY_TOOLS
 
 
 def print_log(phase: str, content: str) -> None:
@@ -24,12 +25,18 @@ def main():
     llm = DeepSeekLLM()
 
     # 创建文件工具
-    tools = FileToolsFactory.create_basic_tools(
+    file_tools = FileToolsFactory.create_basic_tools(
         allowed_directories=[os.getcwd()],
     )
 
+    # 创建记忆工具
+    memory_tools = MEMORY_TOOLS
+
+    # 合并所有工具
+    all_tools = file_tools + memory_tools
+
     # 创建 Agent，传入日志回调
-    agent = Agent(llm=llm, tools=tools, on_log=print_log)
+    agent = Agent(llm=llm, tools=all_tools, on_log=print_log)
     print(f"Agent 已启动 ({agent.config.name})")
     print(f"可用工具: {list(agent.tools.keys())}")
     print("输入 'quit' 或 'exit' 退出\n")

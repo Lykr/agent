@@ -103,6 +103,7 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 
 ### 基本使用
 
+#### 基础示例（文件操作）
 ```python
 from agent.core.agent import Agent
 from agent.llm.deepseek import DeepSeekLLM
@@ -121,6 +122,42 @@ agent.add_tool(FileWriteTool())
 # 运行Agent
 response = agent.run("请读取README.md文件的内容")
 print(response)
+```
+
+#### 记忆系统示例
+```python
+from agent.core.agent import Agent
+from agent.llm.deepseek import DeepSeekLLM
+from agent.tools.memory_tools import MEMORY_TOOLS
+
+# 创建LLM实例
+llm = DeepSeekLLM()
+
+# 创建Agent（会自动初始化记忆系统）
+agent = Agent(llm=llm)
+
+# 添加记忆工具
+for tool in MEMORY_TOOLS:
+    agent.add_tool(tool)
+
+# 示例1: 记住用户偏好
+response = agent.run("请记住我喜欢Python编程和机器学习")
+print(f"回复: {response}")
+
+# 示例2: 回忆相关信息
+response = agent.run("我之前说过我喜欢什么编程语言？")
+print(f"回复: {response}")
+
+# 示例3: 查看记忆状态
+response = agent.run("查看我的记忆统计")
+print(f"回复: {response}")
+
+# 示例4: 多轮对话（记忆会持续）
+response = agent.run("我还喜欢数据科学")
+print(f"回复: {response}")
+
+response = agent.run("总结一下我的兴趣爱好")
+print(f"回复: {response}")
 ```
 
 ## 系统架构
@@ -224,10 +261,14 @@ agent/
 │   │   ├── reasoning/          # 思考模块
 │   │   ├── execution/          # 执行模块
 │   │   └── memory/             # 记忆模块
+│   │       ├── __init__.py     # 模块导出
+│   │       ├── short_term.py   # 短期记忆实现
+│   │       └── long_term.py    # 长期记忆实现（ChromaDB）
 │   ├── tools/                  # 工具系统
 │   │   ├── base.py             # 工具基类
 │   │   ├── file_tools.py       # 文件工具
-│   │   └── system_tools.py     # 系统工具
+│   │   ├── system_tools.py     # 系统工具
+│   │   └── memory_tools.py     # 记忆工具
 │   └── llm/                    # LLM集成
 │       ├── base.py             # LLM接口
 │       ├── deepseek.py         # DeepSeek实现
@@ -307,6 +348,115 @@ class MyCustomTool(Tool):
 4. 推送到分支 (`git push origin feature/amazing-feature`)
 5. 创建 Pull Request
 
+## 记忆系统
+
+Agent框架实现了完整的短期记忆和长期记忆系统，支持记忆的存储、检索和管理。
+
+### 记忆架构
+
+```
+感知 → [记忆检索] → 思考 → 执行 → [记忆存储]
+       ↑                          ↓
+    [短期记忆] <------------> [长期记忆]
+```
+
+### 短期记忆
+
+短期记忆管理当前会话的上下文，包括：
+- **对话历史**: 最近的用户-Agent对话记录
+- **工作记忆**: 当前任务相关的临时信息
+- **记忆条目**: 按重要性评分的记忆片段
+
+**配置示例** (`configs/agent.yaml`):
+```yaml
+memory:
+  short_term:
+    enabled: true
+    max_entries: 20      # 最大记忆条目数
+    max_history: 10      # 最大对话历史数
+```
+
+### 长期记忆
+
+长期记忆使用向量数据库（ChromaDB）实现持久化记忆存储：
+- **语义检索**: 基于内容相似度的记忆检索
+- **重要性评分**: 按重要性过滤和排序记忆
+- **类别管理**: 按类别组织记忆
+- **元数据**: 支持自定义元数据存储
+
+**配置示例**:
+```yaml
+memory:
+  long_term:
+    enabled: true
+    vector_db_provider: "chroma"
+    persist_path: "./data/memory"
+    collection_name: "agent_memories"
+    embedding_model: "all-MiniLM-L6-v2"
+    retrieval_threshold: 0.7
+```
+
+### 记忆工具
+
+Agent提供了专门的内存工具，可以通过工具调用与记忆系统交互：
+
+```python
+from agent.tools.memory_tools import MEMORY_TOOLS
+
+# 添加所有记忆工具
+for tool in MEMORY_TOOLS:
+    agent.add_tool(tool)
+```
+
+可用工具：
+1. **`remember`** - 记住重要信息到长期记忆
+2. **`recall`** - 从记忆中回忆相关信息
+3. **`list_memories`** - 列出记忆系统中的记忆
+4. **`forget`** - 忘记指定的记忆
+5. **`memory_stats`** - 获取记忆系统的统计信息
+
+### 使用示例
+
+```python
+from agent.core.agent import Agent
+from agent.llm.deepseek import DeepSeekLLM
+from agent.tools.memory_tools import MEMORY_TOOLS
+
+# 创建Agent
+llm = DeepSeekLLM()
+agent = Agent(llm=llm)
+
+# 添加记忆工具
+for tool in MEMORY_TOOLS:
+    agent.add_tool(tool)
+
+# 运行Agent - 它会自动使用记忆系统
+response = agent.run("请记住我喜欢Python编程")
+print(response)
+
+# 回忆相关信息
+response = agent.run("回忆一下我喜欢的编程语言")
+print(response)
+
+# 查看记忆统计
+response = agent.run("查看记忆统计信息")
+print(response)
+```
+
+### 记忆检索策略
+
+Agent在感知阶段会自动检索相关记忆：
+1. **短期记忆检索**: 基于关键词匹配的相关记忆
+2. **长期记忆检索**: 基于语义相似度的向量检索
+3. **工作记忆**: 当前任务的上下文信息
+
+### 记忆存储策略
+
+Agent在执行结束后会自动存储重要记忆：
+1. **短期记忆存储**: 所有对话历史和重要交互
+2. **长期记忆存储**: 基于重要性启发式的重要信息
+3. **自动摘要**: 对话历史的自动摘要生成
+
 ## 学习路径
 
 ### 阶段1：基础Agent框架
@@ -314,10 +464,10 @@ class MyCustomTool(Tool):
 - 掌握LLM集成
 - 学习工具系统设计
 
-### 阶段2：记忆系统
-- 实现短期和长期记忆
-- 学习向量数据库集成
-- 掌握记忆检索策略
+### 阶段2：记忆系统 ✅
+- 实现短期和长期记忆 ✅
+- 学习向量数据库集成 ✅
+- 掌握记忆检索策略 ✅
 
 ### 阶段3：高级功能
 - 任务规划和分解

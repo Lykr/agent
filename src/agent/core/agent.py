@@ -12,6 +12,7 @@ from .config import get_config, AgentConfig
 from .state import StateManager
 from ..llm import BaseLLM
 from ..tools import BaseTool
+from ..modules.memory import ShortTermMemory, LongTermMemory
 
 
 class Agent:
@@ -47,6 +48,18 @@ class Agent:
         self.llm = llm
         self.state_manager = StateManager()
         self.tools: Dict[str, BaseTool] = {}
+
+        # 初始化记忆系统
+        self.short_term_memory = ShortTermMemory(
+            max_entries=self.config.memory.short_term.max_entries,
+            max_history=self.config.memory.short_term.max_history
+        )
+
+        self.long_term_memory = LongTermMemory(
+            persist_path=self.config.memory.long_term.persist_path,
+            collection_name=self.config.memory.long_term.collection_name,
+            embedding_model=self.config.memory.long_term.embedding_model
+        )
 
         # 初始化工具
         if tools:
@@ -91,9 +104,105 @@ class Agent:
 
         return "\n".join(descriptions)
 
+    def _get_memory_context(self, user_input: str) -> str:
+        """获取记忆上下文"""
+        memory_context_parts = []
+
+        # 从短期记忆中获取相关记忆
+        if self.config.memory.short_term.enabled:
+            short_term_memories = self.short_term_memory.get_relevant_memories(
+                user_input, count=3
+            )
+            if short_term_memories:
+                memory_context_parts.append("短期记忆:")
+                for i, memory in enumerate(short_term_memories, 1):
+                    memory_context_parts.append(f"{i}. {memory.content}")
+
+        # 从长期记忆中获取相关记忆
+        if self.config.memory.long_term.enabled and self.long_term_memory.is_available():
+            long_term_memories = self.long_term_memory.retrieve_memories(
+                user_input, n_results=2
+            )
+            if long_term_memories:
+                memory_context_parts.append("长期记忆:")
+                for i, memory in enumerate(long_term_memories, 1):
+                    memory_context_parts.append(f"{i}. {memory.content}")
+
+        # 获取工作记忆
+        working_memory = self.short_term_memory.working_memory
+        if working_memory:
+            memory_context_parts.append("工作记忆:")
+            for key, value in working_memory.items():
+                memory_context_parts.append(f"- {key}: {value}")
+
+        if memory_context_parts:
+            return "基于以下记忆信息:\n" + "\n".join(memory_context_parts)
+        else:
+            return ""
+
+    def _store_important_memories(self, user_input: str, response: str) -> None:
+        """存储重要记忆"""
+        # 存储到短期记忆
+        if self.config.memory.short_term.enabled:
+            # 存储用户输入（中等重要性）
+            if user_input and len(user_input) > 10:  # 只存储较长的输入
+                self.short_term_memory.add_memory(
+                    content=f"用户说: {user_input}",
+                    importance=0.6,
+                    category="user_input"
+                )
+
+            # 存储Agent回复（中等重要性）
+            if response and len(response) > 20:  # 只存储较长的回复
+                self.short_term_memory.add_memory(
+                    content=f"我回复: {response[:100]}...",  # 只存储前100字符
+                    importance=0.5,
+                    category="agent_response"
+                )
+
+        # 存储到长期记忆（如果启用）
+        if self.config.memory.long_term.enabled and self.long_term_memory.is_available():
+            # 判断是否应该存储到长期记忆（基于重要性）
+            should_store = False
+            importance = 0.5
+
+            # 简单的启发式规则：如果对话涉及学习目标、用户偏好或重要任务
+            important_keywords = ["学习", "目标", "偏好", "喜欢", "不喜欢", "重要", "记住", "备忘"]
+            if any(keyword in user_input for keyword in important_keywords):
+                should_store = True
+                importance = 0.8
+
+            # 如果涉及工具调用，可能也是重要的
+            if "工具" in response or "调用" in response:
+                should_store = True
+                importance = 0.7
+
+            if should_store:
+                memory_id = self.long_term_memory.store_memory(
+                    content=f"对话: 用户: {user_input[:50]}... | 助手: {response[:50]}...",
+                    importance=importance,
+                    category="conversation",
+                    metadata={
+                        "type": "dialogue",
+                        "user_input": user_input[:100],
+                        "agent_response": response[:100]
+                    }
+                )
+                if memory_id and not memory_id.startswith("存储失败"):
+                    self._log("记忆", f"已存储长期记忆: {memory_id}")
+
+    def _update_conversation_history(self, role: str, content: str) -> None:
+        """更新对话历史到短期记忆"""
+        self.short_term_memory.add_conversation(role, content)
+
     def add_tool(self, tool: BaseTool) -> None:
         """添加工具"""
         self.tools[tool.name] = tool
+
+        # 设置工具上下文（如果工具需要访问Agent）
+        if hasattr(tool, 'context'):
+            tool.context = {"agent": self}
+
         # 更新系统提示词以包含新工具
         self.system_prompt = self._build_system_prompt()
 
@@ -109,6 +218,11 @@ class Agent:
 
         # 添加系统提示
         messages.append({"role": "system", "content": self.system_prompt})
+
+        # 添加记忆上下文（如果启用）
+        memory_context = self._get_memory_context(user_input)
+        if memory_context:
+            messages.append({"role": "system", "content": memory_context})
 
         # 添加历史对话（只包含user/assistant/system角色，过滤内部日志）
         history = self.state_manager.state.get_conversation_history(
@@ -253,6 +367,7 @@ class Agent:
 
         # 记录用户输入
         self.state_manager.state.add_message("user", user_input)
+        self._update_conversation_history("user", user_input)
 
         # 开始运行
         self.state_manager.start()
@@ -278,6 +393,7 @@ class Agent:
                     # 没有工具调用，直接返回思考结果
                     self._log("执行", "无工具调用，跳过执行阶段")
                     self.state_manager.state.add_message("assistant", llm_response)
+                    self._update_conversation_history("assistant", llm_response)
                     self.state_manager.state.increment_step()
                     final_response = llm_response
                     break
@@ -287,6 +403,7 @@ class Agent:
 
                 # 记录助手回复
                 self.state_manager.state.add_message("assistant", response)
+                self._update_conversation_history("assistant", response)
 
                 # 更新状态
                 self.state_manager.state.increment_step()
@@ -299,6 +416,9 @@ class Agent:
 
                 # 准备下一轮的用户输入（工具执行结果已包含在消息中）
                 user_input = ""
+
+            # 运行结束后存储重要记忆
+            self._store_important_memories(user_input, final_response)
 
             return final_response
 
@@ -322,18 +442,23 @@ class Agent:
             "state": self.state_manager.state.to_dict(),
             "tools": list(self.tools.keys()),
             "system_prompt_length": len(self.system_prompt),
+            "short_term_memory": self.short_term_memory.to_dict(),
+            "long_term_memory": self.long_term_memory.get_statistics(),
         }
 
     def reset(self, clear_history: bool = False) -> None:
         """重置Agent状态"""
         self.state_manager.reset(clear_history=clear_history)
+        if clear_history:
+            self.short_term_memory.reset()
 
     def __str__(self) -> str:
         """字符串表示"""
         return (
             f"Agent(name={self.config.name}, "
             f"tools={len(self.tools)}, "
-            f"steps={self.state_manager.state.current_step})"
+            f"steps={self.state_manager.state.current_step}, "
+            f"short_term_memories={len(self.short_term_memory.memories)})"
         )
 
 

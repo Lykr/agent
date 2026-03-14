@@ -159,6 +159,15 @@ Thumbs.db
 # Vector database
 chroma/
 *.chroma
+*.sqlite3
+*.sqlite
+*.db
+data/memory/
+
+# Editor temporary files
+*.swp
+*.swo
+*~
 
 # Logs
 logs/

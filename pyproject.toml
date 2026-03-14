@@ -36,17 +36,19 @@ dependencies = [
     "requests>=2.31.0",
     "python-dotenv>=1.0.0",
 
-    # Async support
+    # Async support (also available in optional dependencies)
     "anyio>=4.0.0",
     "httpx>=0.25.0",
 
     # Utilities
-    "loguru>=0.7.0",  # Better logging
     "click>=8.1.0",   # CLI framework
     "typing-extensions>=4.8.0",
 
     # Configuration
     "pyyaml>=6.0",    # YAML support
+
+    # Memory system (vector database)
+    "chromadb>=0.4.0",    # ChromaDB for long-term memory
 ]
 
 [project.optional-dependencies]
@@ -57,18 +59,17 @@ llm = [
     "cohere>=5.0.0",      # Cohere API
 ]
 
-# Vector databases
+# Vector databases (alternative to ChromaDB)
 vector-db = [
-    "chromadb>=0.4.0",    # ChromaDB
     "qdrant-client>=1.6.0", # Qdrant
     "pinecone-client>=3.0.0", # Pinecone
+    "sentence-transformers>=2.2.0", # For custom embeddings
 ]
 
-# Async support
+# Async support (duplicate of main dependencies for optional installation)
 async = [
     "anyio>=4.0.0",
     "httpx>=0.25.0",
-    "asyncio>=3.4.3",
 ]
 
 # UI/CLI enhancements
@@ -104,17 +105,14 @@ dev = [
     "watchfiles>=0.21.0",  # File watching for auto-reload
 ]
 
-# All dependencies (for easy installation)
+# All optional dependencies (for easy installation)
 all = [
     "openai>=1.0.0",
     "anthropic>=0.25.0",
     "cohere>=5.0.0",
-    "chromadb>=0.4.0",
     "qdrant-client>=1.6.0",
     "pinecone-client>=3.0.0",
-    "anyio>=4.0.0",
-    "httpx>=0.25.0",
-    "asyncio>=3.4.3",
+    "sentence-transformers>=2.2.0",
     "rich>=13.0.0",
     "typer>=0.9.0",
     "questionary>=2.0.0",
@@ -157,8 +155,7 @@ source = "vcs"
 
 [tool.hatch.envs.default]
 dependencies = [
-    "pytest",
-    "pytest-cov",
+    # Development dependencies are already in the dev optional dependencies
 ]
 
 [tool.hatch.envs.default.scripts]
@@ -180,7 +177,7 @@ disallow_untyped_defs = true
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py39"
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -212,7 +209,6 @@ isort = { known-first-party = ["agent"] }
 # Use black-compatible formatting
 quote-style = "double"
 indent-style = "space"
-indent-width = 4
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -226,4 +222,5 @@ addopts = [
 ]
 
 [project.scripts]
-agent = "agent.cli:main"
+# Note: CLI entry point will be implemented in future versions
+# agent = "agent.cli:main"

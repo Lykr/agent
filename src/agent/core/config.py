@@ -33,6 +33,7 @@ class MemoryConfig(BaseModel):
     class ShortTermConfig(BaseModel):
         """短期记忆配置"""
         enabled: bool = Field(default=True, description="是否启用短期记忆")
+        max_entries: int = Field(default=20, description="最大记忆条目数")
         max_history: int = Field(default=10, description="最大历史记录数")
 
     class LongTermConfig(BaseModel):
@@ -40,6 +41,9 @@ class MemoryConfig(BaseModel):
         enabled: bool = Field(default=False, description="是否启用长期记忆")
         vector_db_provider: str = Field(default="chroma", description="向量数据库提供商")
         persist_path: str = Field(default="./data/memory", description="持久化路径")
+        collection_name: str = Field(default="agent_memories", description="集合名称")
+        embedding_model: str = Field(default="all-MiniLM-L6-v2", description="嵌入模型")
+        retrieval_threshold: float = Field(default=0.7, description="检索阈值")
 
     short_term: ShortTermConfig = Field(default_factory=ShortTermConfig)
     long_term: LongTermConfig = Field(default_factory=LongTermConfig)
