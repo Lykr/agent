@@ -162,7 +162,6 @@ chroma/
 *.sqlite3
 *.sqlite
 *.db
-data/memory/
 
 # Editor temporary files
 *.swp

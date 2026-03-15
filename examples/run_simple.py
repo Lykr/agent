@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-交互式 Agent 运行脚本
+交互式 Agent 运行脚本 - 简单版本（无TUI）
 """
 
 import os
 import readline  # noqa: F401 - 启用终端行编辑支持
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.agent.core.agent import Agent
 from src.agent.llm.deepseek import DeepSeekLLM

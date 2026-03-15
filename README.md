@@ -55,6 +55,7 @@
 - 🔄 反思和自我改进
 - 🔄 多步骤任务执行
 - 🔄 插件系统
+- ✅ 优雅的TUI界面（实时状态显示）
 
 ## 快速开始
 
@@ -102,6 +103,15 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 ```
 
 ### 基本使用
+
+#### 交互式运行（带TUI界面）
+```bash
+# 使用TUI界面运行Agent（推荐）
+python run.py
+
+# 使用简单界面运行Agent
+python run_simple.py
+```
 
 #### 基础示例（文件操作）
 ```python
@@ -247,6 +257,96 @@ graph TB
     style CustomTools fill:#e0f7fa
 ```
 
+## TUI界面
+
+Agent框架提供了一个优雅的终端用户界面（TUI），实时显示Agent的运行状态和活动日志。
+
+### 主要特性
+
+- **实时状态监控**: 显示当前运行阶段、步骤计数、运行时间
+- **活动日志**: 显示最近的工具调用和记忆更新
+- **美观的布局**: 使用Rich库创建的分栏布局
+- **响应式设计**: 自动适应终端大小变化
+- **Markdown渲染**: Agent回复以美观的Markdown格式显示
+
+### 界面预览
+
+```
+╭────────────────────────────── AI Agent 控制台 ───────────────────────────────╮
+│ 🤖 教学AI助手 | 状态: 思考 | 步骤: 2 | 2026-03-15 14:30:25                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭───────── 状态 ─────────╮╭───────────────────── 活动日志 ─────────────────────╮
+│                        ││                                                    │
+│  运行时间      3.2s    ││ 当前活动: 调用LLM生成回复...                       │
+│  当前阶段      思考    ││                                                    │
+│  工具调用      1       ││ 最近工具调用:                                      │
+│  记忆更新      0       ││   • read_file: 执行 read_file，输入: test.txt      │
+│                        ││                                                    │
+│                        ││ 等待活动...                                        │
+│                        ││                                                    │
+╰────────────────────────╯╰────────────────────────────────────────────────────╯
+```
+
+### 使用方式
+
+#### 1. 直接运行（推荐）
+```bash
+python run.py
+```
+
+#### 2. 在代码中使用TUI
+```python
+from src.agent.ui import create_tui_logger
+from src.agent.core.agent import Agent
+from src.agent.llm.deepseek import DeepSeekLLM
+
+# 创建TUI日志回调
+log_callback, tui = create_tui_logger(agent_name="我的Agent")
+
+# 启动TUI
+tui.start()
+
+# 创建Agent（传入TUI日志回调）
+llm = DeepSeekLLM()
+agent = Agent(llm=llm, on_log=log_callback)
+
+# 运行Agent
+response = agent.run("你好，请帮我分析这个项目")
+
+# 显示最终回复
+tui.show_final_response(response)
+
+# 停止TUI
+tui.stop()
+```
+
+#### 3. 使用便捷函数
+```python
+from src.agent.ui import run_with_tui
+
+def create_agent(on_log=None):
+    from src.agent.core.agent import Agent
+    from src.agent.llm.deepseek import DeepSeekLLM
+
+    llm = DeepSeekLLM()
+    return Agent(llm=llm, on_log=on_log)
+
+# 使用TUI运行Agent
+run_with_tui(create_agent, agent_name="教学助手")
+```
+
+### 安装UI依赖
+
+TUI界面需要Rich库支持，可以通过以下方式安装：
+
+```bash
+# 使用uv安装UI依赖
+uv pip install "rich>=13.0.0" "typer>=0.9.0" "questionary>=2.0.0"
+
+# 或者安装所有可选依赖
+uv pip install -e ".[ui]"
+```
+
 ## 项目结构
 
 ```
@@ -269,10 +369,13 @@ agent/
 │   │   ├── file_tools.py       # 文件工具
 │   │   ├── system_tools.py     # 系统工具
 │   │   └── memory_tools.py     # 记忆工具
-│   └── llm/                    # LLM集成
-│       ├── base.py             # LLM接口
-│       ├── deepseek.py         # DeepSeek实现
-│       └── mock.py             # 模拟LLM
+│   ├── llm/                    # LLM集成
+│   │   ├── base.py             # LLM接口
+│   │   ├── deepseek.py         # DeepSeek实现
+│   │   └── mock.py             # 模拟LLM
+│   └── ui/                     # 用户界面
+│       ├── __init__.py         # UI模块导出
+│       └── tui.py              # TUI实现
 ├── examples/                   # 示例代码
 ├── tests/                      # 测试代码
 ├── docs/                       # 文档
