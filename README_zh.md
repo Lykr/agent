@@ -153,30 +153,21 @@ graph TB
     end
 
     subgraph "Agent 核心"
-        Agent[Agent 主控制器]
+        Run[run]
+        Plan[任务规划器]
 
-        subgraph "感知模块"
-            Perceive[感知器<br/>收集环境信息]
+        subgraph "运行循环"
+            Perceive[_perceive<br/>构建上下文]
+            LLM[LLM<br/>DeepSeek API]
+            Execute[执行工具]
         end
 
-        subgraph "思考模块"
-            Reason[推理引擎<br/>分析决策]
-            Plan[任务规划器<br/>分解任务]
-            Reflect[反思引擎<br/>分析改进]
-        end
-
-        subgraph "执行模块"
-            Execute[执行器<br/>调用工具]
-        end
-
-        subgraph "记忆模块"
+        subgraph "记忆"
             ShortMem[短期记忆<br/>会话上下文]
             LongMem[长期记忆<br/>向量数据库]
         end
 
-        subgraph "LLM 集成"
-            LLM[大语言模型<br/>DeepSeek API]
-        end
+        Reflect[反思引擎]
 
         subgraph "工具系统"
             FileTools[文件工具]
@@ -185,22 +176,24 @@ graph TB
         end
     end
 
-    User --> Agent
-    Agent --> Perceive
-    Perceive --> Reason
-    Reason --> Plan
-    Plan --> Execute
+    User --> Run
+    Run -->|enable_planning| Plan
+    Plan -->|子任务| LLM
+    Plan --> Perceive
+    Run -->|直接执行| Perceive
+    ShortMem --> Perceive
+    LongMem --> Perceive
+    Perceive --> LLM
+    LLM -->|工具调用| Execute
     Execute --> FileTools
     Execute --> MemTools
     Execute --> CustomTools
-    Reason --> ShortMem
-    Reason --> LongMem
-    ShortMem --> Reason
-    LongMem --> Reason
-    Reason --> LLM
-    LLM --> Reason
     Execute --> Env
-    Execute --> Reflect
+    Execute -->|执行结果| LLM
+    LLM -->|最终回复| Run
+    Run -->|存储记忆| ShortMem
+    Run -->|存储记忆| LongMem
+    Run -->|enable_reflection| Reflect
     Reflect --> LongMem
 ```
 

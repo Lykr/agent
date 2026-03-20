@@ -131,30 +131,21 @@ graph TB
     end
 
     subgraph "Agent Core"
-        Agent[Agent Controller]
+        Run[run]
+        Plan[Task Planner]
 
-        subgraph "Perception"
-            Perceive[Context Builder]
+        subgraph "run loop"
+            Perceive[_perceive<br/>build context]
+            LLM[LLM<br/>DeepSeek API]
+            Execute[Execute Tool]
         end
 
-        subgraph "Thinking"
-            Reason[Reasoning Engine]
-            Plan[Task Planner]
-            Reflect[Reflection Engine]
+        subgraph "Memory"
+            ShortMem[Short-term<br/>session context]
+            LongMem[Long-term<br/>vector DB]
         end
 
-        subgraph "Action"
-            Execute[Tool Executor]
-        end
-
-        subgraph "Memory System"
-            ShortMem[Short-term<br/>Session context]
-            LongMem[Long-term<br/>Vector DB]
-        end
-
-        subgraph "LLM Integration"
-            LLM[DeepSeek API]
-        end
+        Reflect[Reflection Engine]
 
         subgraph "Tools"
             FileTools[File Tools]
@@ -163,19 +154,24 @@ graph TB
         end
     end
 
-    User --> Agent
-    Agent --> Perceive
-    Perceive --> Reason
-    Reason --> Plan
-    Plan --> Execute
+    User --> Run
+    Run -->|enable_planning| Plan
+    Plan -->|subtasks| LLM
+    Plan --> Perceive
+    Run -->|direct| Perceive
+    ShortMem --> Perceive
+    LongMem --> Perceive
+    Perceive --> LLM
+    LLM -->|tool call| Execute
     Execute --> FileTools
     Execute --> MemTools
     Execute --> CustomTools
-    Reason <--> ShortMem
-    Reason <--> LongMem
-    Reason <--> LLM
     Execute --> Env
-    Agent --> Reflect
+    Execute -->|result| LLM
+    LLM -->|final response| Run
+    Run -->|store memories| ShortMem
+    Run -->|store memories| LongMem
+    Run -->|enable_reflection| Reflect
     Reflect --> LongMem
 ```
 
