@@ -152,7 +152,7 @@ graph TB
             LongMem[Long-term<br/>Vector DB]
         end
 
-        subgraph "LLM"
+        subgraph "LLM Integration"
             LLM[DeepSeek API]
         end
 
@@ -168,8 +168,11 @@ graph TB
     Perceive --> Reason
     Reason --> Plan
     Plan --> Execute
-    Execute --> FileTools & MemTools & CustomTools
-    Reason <--> ShortMem & LongMem
+    Execute --> FileTools
+    Execute --> MemTools
+    Execute --> CustomTools
+    Reason <--> ShortMem
+    Reason <--> LongMem
     Reason <--> LLM
     Execute --> Env
     Execute --> Reflect
