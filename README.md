@@ -175,7 +175,7 @@ graph TB
     Reason <--> LongMem
     Reason <--> LLM
     Execute --> Env
-    Execute --> Reflect
+    Agent --> Reflect
     Reflect --> LongMem
 ```
 
