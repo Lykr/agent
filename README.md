@@ -133,21 +133,21 @@ graph TB
     subgraph "Agent Core"
         Agent[Agent Controller]
 
-        subgraph "Perceive"
+        subgraph "Perception"
             Perceive[Context Builder]
         end
 
-        subgraph "Think"
+        subgraph "Thinking"
             Reason[Reasoning Engine]
             Plan[Task Planner]
             Reflect[Reflection Engine]
         end
 
-        subgraph "Act"
+        subgraph "Action"
             Execute[Tool Executor]
         end
 
-        subgraph "Memory"
+        subgraph "Memory System"
             ShortMem[Short-term<br/>Session context]
             LongMem[Long-term<br/>Vector DB]
         end
