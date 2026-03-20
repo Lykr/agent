@@ -198,3 +198,6 @@ __pypackages__/
 # mkdocs
 site/
 .mkdocs-cache/
+
+# data
+data/

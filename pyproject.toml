@@ -74,7 +74,7 @@ async = [
 
 # UI/CLI enhancements
 ui = [
-    "rich>=13.0.0",       # Rich terminal output
+    "textual>=0.55.0",    # Textual TUI framework
     "typer>=0.9.0",       # Modern CLI framework
     "questionary>=2.0.0", # Interactive prompts
 ]
@@ -198,9 +198,6 @@ ignore = [
 [tool.ruff.lint]
 # Enable pyupgrade rules
 pyupgrade = { keep-runtime-typing = true }
-
-# Enable flake8-2020
-flake8-2020 = true
 
 # Enable isort
 isort = { known-first-party = ["agent"] }

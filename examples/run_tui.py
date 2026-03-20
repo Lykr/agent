@@ -20,7 +20,6 @@ from typing import Optional, Callable
 # 检查必要依赖
 try:
     from rich.console import Console
-    from rich.prompt import Prompt
 except ImportError:
     print("错误: 缺少 rich 库，请安装 UI 依赖")
     print("安装命令: uv pip install -e '.[ui]' 或 pip install rich")
@@ -46,6 +45,8 @@ def create_agent(
     allowed_directories: Optional[list[str]] = None,
     agent_name: Optional[str] = None,
     include_memory_tools: bool = True,
+    enable_planning: bool = False,
+    enable_reflection: bool = False,
 ) -> Agent:
     """
     创建 Agent 的工厂函数
@@ -85,8 +86,11 @@ def create_agent(
     if include_memory_tools:
         all_tools.extend(MEMORY_TOOLS)
 
-    # 创建 Agent，传入日志回调和配置
-    agent = Agent(llm=llm, tools=all_tools, on_log=on_log, config=config_path)
+    # 创建 Agent
+    agent = Agent(
+        llm=llm, tools=all_tools, on_log=on_log, config=config_path,
+        enable_planning=enable_planning, enable_reflection=enable_reflection,
+    )
 
     # 覆盖 Agent 名称（如果提供）
     if agent_name:
@@ -134,6 +138,20 @@ def parse_args():
         default=False,
     )
     parser.add_argument(
+        "--planning",
+        "-p",
+        action="store_true",
+        help="启用任务规划（将复杂任务分解为子任务）",
+        default=False,
+    )
+    parser.add_argument(
+        "--reflection",
+        "-r",
+        action="store_true",
+        help="启用反思（任务完成后分析执行过程）",
+        default=False,
+    )
+    parser.add_argument(
         "--version",
         "-v",
         action="version",
@@ -177,6 +195,12 @@ def main():
     else:
         console.print("[green]记忆工具: 启用[/green]")
 
+    # 高级功能状态
+    if args.planning:
+        console.print("[cyan]任务规划: 启用[/cyan]")
+    if args.reflection:
+        console.print("[cyan]反思引擎: 启用[/cyan]")
+
     # 检查 DeepSeek API 密钥
     if not os.getenv("DEEPSEEK_API_KEY"):
         console.print("[yellow]警告: 未设置 DEEPSEEK_API_KEY 环境变量[/yellow]")
@@ -191,6 +215,8 @@ def main():
             allowed_directories=args.dir,
             agent_name=args.name,
             include_memory_tools=not args.no_memory,
+            enable_planning=args.planning,
+            enable_reflection=args.reflection,
         )
 
     # 使用 TUI 运行 Agent

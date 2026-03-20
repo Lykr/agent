@@ -1,6 +1,6 @@
 # Agent - AI Agent 学习框架
 
-一个教学性质的AI Agent框架，用于学习和理解AI Agent的核心概念和实现技术。
+作者在学习AI Agent相关知识过程中构建的实践项目，用于探索和理解AI Agent的核心概念与实现技术。
 
 ## 设计理念
 
@@ -9,7 +9,7 @@
 ### 项目哲学与核心理念
 - **根本学习目标**：理解AI Agent的基本原理、掌握具体的实现技术、探索AI Agent的应用场景
 - **设计哲学**：体现"简单胜于复杂"、"从实践中学习"、"模块化设计"的理念
-- **核心价值主张**：一个教学性质的AI Agent实现，注重学习价值而非生产部署
+- **核心价值主张**：作者个人学习Agent技术的实践项目，注重学习价值而非生产部署
 
 ### 项目定位与边界
 - **主要解决问题**：通用任务执行，能够处理多步骤的复杂任务
@@ -39,30 +39,25 @@
 1. **学习AI Agent基本原理**：通过实践理解Agent的感知-思考-执行循环
 2. **掌握实现技术**：从基础到SOTA的Agent实现技术
 3. **构建可扩展框架**：模块化设计，支持插件和扩展
-4. **教学价值**：清晰的架构和详细的实现说明
 
 ## 功能特性
 
 ### 核心功能
 - ✅ 感知-思考-执行循环
 - ✅ LLM集成（DeepSeek API）
-- ✅ 工具系统（文件操作、系统命令等）
+- ✅ 工具系统（文件操作等）
 - ✅ 记忆系统（短期/长期记忆）
 - ✅ 配置驱动行为
 
 ### 高级功能
-- 🔄 任务规划和分解
-- 🔄 反思和自我改进
-- 🔄 多步骤任务执行
-- 🔄 插件系统
+- ✅ 任务规划和分解（`--planning`）
+- ✅ 反思和自我改进（`--reflection`）
+- ✅ 多Agent协作（`enable_multi_agent=True`）
 - ✅ 优雅的TUI界面（实时状态显示）
 
 ## 快速开始
 
 ### 安装
-
-#### 使用 uv（推荐）
-[uv](https://github.com/astral-sh/uv) 是一个快速的Python包管理器和解析器。
 
 ```bash
 # 克隆项目
@@ -72,25 +67,7 @@ cd agent
 # 使用uv创建虚拟环境并安装依赖
 uv venv
 source .venv/bin/activate  # Linux/Mac
-# 或 .venv\Scripts\activate  # Windows
-
-# 安装依赖
-uv pip install -e .
-```
-
-#### 使用传统方法
-```bash
-# 克隆项目
-git clone https://github.com/Lykr/agent.git
-cd agent
-
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或 venv\Scripts\activate  # Windows
-
-# 安装依赖
-pip install -e .
+uv pip install -e ".[dev]"
 ```
 
 ### 配置
@@ -102,72 +79,68 @@ DEEPSEEK_API_KEY=your_api_key_here
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 ```
 
-### 基本使用
+### 运行
 
-#### 交互式运行（带TUI界面）
 ```bash
-# 使用TUI界面运行Agent（推荐）
-python run.py
+# 基础模式
+python examples/run_tui.py
 
-# 使用简单界面运行Agent
-python run_simple.py
+# 启用任务规划（将复杂任务分解为子任务）
+python examples/run_tui.py --planning
+
+# 启用反思（任务完成后分析执行过程）
+python examples/run_tui.py --reflection
+
+# 同时启用
+python examples/run_tui.py --planning --reflection
+
+# 更多选项
+python examples/run_tui.py --help
 ```
 
-#### 基础示例（文件操作）
+### 代码示例
+
+#### 基础用法
+
 ```python
-from agent.core.agent import Agent
-from agent.llm.deepseek import DeepSeekLLM
-from agent.tools.file_tools import FileReadTool, FileWriteTool
+from src.agent.core.agent import Agent
+from src.agent.llm.deepseek import DeepSeekLLM
+from src.agent.tools.file_tools import FileToolsFactory
 
-# 创建LLM实例
 llm = DeepSeekLLM()
+tools = FileToolsFactory.create_basic_tools(allowed_directories=["."])
+agent = Agent(llm=llm, tools=tools)
 
-# 创建Agent
-agent = Agent(llm=llm)
-
-# 添加工具
-agent.add_tool(FileReadTool())
-agent.add_tool(FileWriteTool())
-
-# 运行Agent
 response = agent.run("请读取README.md文件的内容")
 print(response)
 ```
 
-#### 记忆系统示例
+#### 启用任务规划与反思
+
 ```python
-from agent.core.agent import Agent
-from agent.llm.deepseek import DeepSeekLLM
-from agent.tools.memory_tools import MEMORY_TOOLS
+from src.agent.core.agent import Agent
+from src.agent.llm.deepseek import DeepSeekLLM
 
-# 创建LLM实例
 llm = DeepSeekLLM()
+agent = Agent(llm=llm, enable_planning=True, enable_reflection=True)
 
-# 创建Agent（会自动初始化记忆系统）
-agent = Agent(llm=llm)
+response = agent.run("分析项目结构，列出所有Python文件并统计代码行数")
+print(response)
+```
 
-# 添加记忆工具
-for tool in MEMORY_TOOLS:
-    agent.add_tool(tool)
+#### 记忆工具
 
-# 示例1: 记住用户偏好
-response = agent.run("请记住我喜欢Python编程和机器学习")
-print(f"回复: {response}")
+```python
+from src.agent.core.agent import Agent
+from src.agent.llm.deepseek import DeepSeekLLM
+from src.agent.tools.memory_tools import MEMORY_TOOLS
 
-# 示例2: 回忆相关信息
-response = agent.run("我之前说过我喜欢什么编程语言？")
-print(f"回复: {response}")
+llm = DeepSeekLLM()
+agent = Agent(llm=llm, tools=MEMORY_TOOLS)
 
-# 示例3: 查看记忆状态
-response = agent.run("查看我的记忆统计")
-print(f"回复: {response}")
-
-# 示例4: 多轮对话（记忆会持续）
-response = agent.run("我还喜欢数据科学")
-print(f"回复: {response}")
-
-response = agent.run("总结一下我的兴趣爱好")
-print(f"回复: {response}")
+agent.run("请记住我喜欢Python编程和机器学习")
+response = agent.run("我之前说过我喜欢什么？")
+print(response)
 ```
 
 ## 系统架构
@@ -189,6 +162,7 @@ graph TB
         subgraph "思考模块"
             Reason[推理引擎<br/>分析决策]
             Plan[任务规划器<br/>分解任务]
+            Reflect[反思引擎<br/>分析改进]
         end
 
         subgraph "执行模块"
@@ -206,146 +180,60 @@ graph TB
 
         subgraph "工具系统"
             FileTools[文件工具]
-            SysTools[系统工具]
-            APITools[API工具]
+            MemTools[记忆工具]
             CustomTools[自定义工具]
         end
     end
 
-    %% 数据流向
     User --> Agent
     Agent --> Perceive
     Perceive --> Reason
     Reason --> Plan
     Plan --> Execute
     Execute --> FileTools
-    Execute --> SysTools
-    Execute --> APITools
+    Execute --> MemTools
     Execute --> CustomTools
-
-    %% 记忆交互
     Reason --> ShortMem
     Reason --> LongMem
     ShortMem --> Reason
     LongMem --> Reason
-
-    %% LLM 交互
     Reason --> LLM
     LLM --> Reason
-
-    %% 环境交互
-    FileTools --> Env
-    SysTools --> Env
-    APITools --> Env
-    CustomTools --> Env
-
-    %% 反馈循环
-    Execute --> Perceive
-    Env --> Perceive
-
-    style Agent fill:#e1f5fe
-    style Perceive fill:#f3e5f5
-    style Reason fill:#e8f5e8
-    style Plan fill:#fff3e0
-    style Execute fill:#ffebee
-    style ShortMem fill:#f1f8e9
-    style LongMem fill:#e0f2f1
-    style LLM fill:#fff8e1
-    style FileTools fill:#fce4ec
-    style SysTools fill:#f3e5f5
-    style APITools fill:#e8eaf6
-    style CustomTools fill:#e0f7fa
+    Execute --> Env
+    Execute --> Reflect
+    Reflect --> LongMem
 ```
 
 ## TUI界面
 
-Agent框架提供了一个优雅的终端用户界面（TUI），实时显示Agent的运行状态和活动日志。
-
-### 主要特性
-
-- **实时状态监控**: 显示当前运行阶段、步骤计数、运行时间
-- **活动日志**: 显示最近的工具调用和记忆更新
-- **美观的布局**: 使用Rich库创建的分栏布局
-- **响应式设计**: 自动适应终端大小变化
-- **Markdown渲染**: Agent回复以美观的Markdown格式显示
-
-### 界面预览
-
-```
-╭────────────────────────────── AI Agent 控制台 ───────────────────────────────╮
-│ 🤖 教学AI助手 | 状态: 思考 | 步骤: 2 | 2026-03-15 14:30:25                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭───────── 状态 ─────────╮╭───────────────────── 活动日志 ─────────────────────╮
-│                        ││                                                    │
-│  运行时间      3.2s    ││ 当前活动: 调用LLM生成回复...                       │
-│  当前阶段      思考    ││                                                    │
-│  工具调用      1       ││ 最近工具调用:                                      │
-│  记忆更新      0       ││   • read_file: 执行 read_file，输入: test.txt      │
-│                        ││                                                    │
-│                        ││ 等待活动...                                        │
-│                        ││                                                    │
-╰────────────────────────╯╰────────────────────────────────────────────────────╯
-```
+Agent框架提供了一个终端用户界面（TUI），实时显示Agent的运行状态和活动日志。
 
 ### 使用方式
 
-#### 1. 直接运行（推荐）
 ```bash
-python run.py
+# 基础运行
+python examples/run_tui.py
+
+# 指定配置文件和工作目录
+python examples/run_tui.py --config configs/agent.yaml --dir . --dir ./data
+
+# 禁用记忆工具
+python examples/run_tui.py --no-memory
+
+# 启用高级功能
+python examples/run_tui.py -p -r  # planning + reflection
 ```
 
-#### 2. 在代码中使用TUI
-```python
-from src.agent.ui import create_tui_logger
-from src.agent.core.agent import Agent
-from src.agent.llm.deepseek import DeepSeekLLM
+所有选项：
 
-# 创建TUI日志回调
-log_callback, tui = create_tui_logger(agent_name="我的Agent")
-
-# 启动TUI
-tui.start()
-
-# 创建Agent（传入TUI日志回调）
-llm = DeepSeekLLM()
-agent = Agent(llm=llm, on_log=log_callback)
-
-# 运行Agent
-response = agent.run("你好，请帮我分析这个项目")
-
-# 显示最终回复
-tui.show_final_response(response)
-
-# 停止TUI
-tui.stop()
-```
-
-#### 3. 使用便捷函数
-```python
-from src.agent.ui import run_with_tui
-
-def create_agent(on_log=None):
-    from src.agent.core.agent import Agent
-    from src.agent.llm.deepseek import DeepSeekLLM
-
-    llm = DeepSeekLLM()
-    return Agent(llm=llm, on_log=on_log)
-
-# 使用TUI运行Agent
-run_with_tui(create_agent, agent_name="教学助手")
-```
-
-### 安装UI依赖
-
-TUI界面需要Rich库支持，可以通过以下方式安装：
-
-```bash
-# 使用uv安装UI依赖
-uv pip install "rich>=13.0.0" "typer>=0.9.0" "questionary>=2.0.0"
-
-# 或者安装所有可选依赖
-uv pip install -e ".[ui]"
-```
+| 选项 | 简写 | 说明 |
+|------|------|------|
+| `--config` | `-c` | 配置文件路径（YAML） |
+| `--name` | `-n` | Agent 名称 |
+| `--dir` | `-d` | 允许访问的目录（可多次使用） |
+| `--no-memory` | | 禁用记忆工具 |
+| `--planning` | `-p` | 启用任务规划 |
+| `--reflection` | `-r` | 启用反思引擎 |
 
 ## 项目结构
 
@@ -353,109 +241,89 @@ uv pip install -e ".[ui]"
 agent/
 ├── src/agent/
 │   ├── core/                    # 核心模块
-│   │   ├── agent.py            # Agent主类
+│   │   ├── agent.py            # Agent主类（含规划、反思、多Agent协作）
 │   │   ├── state.py            # 状态管理
 │   │   └── config.py           # 配置管理
 │   ├── modules/                # 功能模块
-│   │   ├── perception/         # 感知模块
-│   │   ├── reasoning/          # 思考模块
-│   │   ├── execution/          # 执行模块
-│   │   └── memory/             # 记忆模块
-│   │       ├── __init__.py     # 模块导出
-│   │       ├── short_term.py   # 短期记忆实现
-│   │       └── long_term.py    # 长期记忆实现（ChromaDB）
+│   │   ├── memory/             # 记忆模块
+│   │   │   ├── short_term.py   # 短期记忆
+│   │   │   └── long_term.py    # 长期记忆（ChromaDB）
+│   │   ├── reasoning/          # 推理模块
+│   │   │   ├── planning.py     # 任务规划器
+│   │   │   └── reflection.py   # 反思引擎
+│   │   └── coordination/       # 协调模块
+│   │       └── multi_agent.py  # 多Agent协调器
 │   ├── tools/                  # 工具系统
 │   │   ├── base.py             # 工具基类
 │   │   ├── file_tools.py       # 文件工具
-│   │   ├── system_tools.py     # 系统工具
 │   │   └── memory_tools.py     # 记忆工具
 │   ├── llm/                    # LLM集成
 │   │   ├── base.py             # LLM接口
 │   │   ├── deepseek.py         # DeepSeek实现
-│   │   └── mock.py             # 模拟LLM
+│   │   └── mock.py             # 模拟LLM（用于测试）
 │   └── ui/                     # 用户界面
-│       ├── __init__.py         # UI模块导出
 │       └── tui.py              # TUI实现
-├── examples/                   # 示例代码
+├── examples/
+│   └── run_tui.py              # 主运行脚本
 ├── tests/                      # 测试代码
-├── docs/                       # 文档
 ├── configs/                    # 配置文件
-└── scripts/                    # 工具脚本
+└── docs/                       # 文档
 ```
 
 ## 开发指南
 
-### 设置开发环境
-
-#### 使用 uv
 ```bash
 # 安装开发依赖
 uv pip install -e ".[dev]"
 
 # 运行测试
-pytest
+pytest tests/ -v --cov=src/agent --cov-report=term-missing
 
-# 代码格式化
+# 代码检查 + 格式化
+ruff check src tests
 black src tests
-
-# 类型检查
 mypy src
-
-# 代码检查
-ruff check src
 
 # 或者使用 Makefile
-make uv-dev-install  # 安装开发依赖
-make test           # 运行测试
-make lint           # 代码检查
-make format         # 代码格式化
-```
-
-#### 使用传统方法
-```bash
-# 安装开发依赖
-pip install -e ".[dev]"
-
-# 运行测试
-pytest
-
-# 代码格式化
-black src tests
-
-# 类型检查
-mypy src
-
-# 代码检查
-ruff check src
+make uv-check
 ```
 
 ### 添加新工具
 
+继承 `BaseTool`，实现 `name`、`description` 和 `_execute_impl`：
+
 ```python
-from agent.tools.base import Tool
+from src.agent.tools.base import BaseTool
 
-class MyCustomTool(Tool):
-    name = "my_custom_tool"
-    description = "我的自定义工具描述"
+class MyTool(BaseTool):
+    @property
+    def name(self) -> str:
+        return "my_tool"
 
-    def execute(self, input_text: str) -> str:
-        # 实现工具逻辑
+    @property
+    def description(self) -> str:
+        return "工具描述"
+
+    def _execute_impl(self, input_text: str) -> str:
         return f"处理结果: {input_text}"
 ```
 
-### 贡献
+### 添加新LLM提供商
 
-1. Fork 项目
-2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'Add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 创建 Pull Request
+继承 `BaseLLM`，实现 `generate()`、`chat()` 和 `get_model_info()`：
+
+```python
+from src.agent.llm.base import BaseLLM
+
+class MyLLM(BaseLLM):
+    def generate(self, messages, **kwargs) -> str: ...
+    def chat(self, message, **kwargs) -> str: ...
+    def get_model_info(self) -> dict: ...
+```
 
 ## 记忆系统
 
-Agent框架实现了完整的短期记忆和长期记忆系统，支持记忆的存储、检索和管理。
-
-### 记忆架构
+### 架构
 
 ```
 感知 → [记忆检索] → 思考 → 执行 → [记忆存储]
@@ -465,29 +333,20 @@ Agent框架实现了完整的短期记忆和长期记忆系统，支持记忆的
 
 ### 短期记忆
 
-短期记忆管理当前会话的上下文，包括：
-- **对话历史**: 最近的用户-Agent对话记录
-- **工作记忆**: 当前任务相关的临时信息
-- **记忆条目**: 按重要性评分的记忆片段
+管理当前会话的上下文：对话历史、工作记忆、按重要性评分的记忆片段。
 
-**配置示例** (`configs/agent.yaml`):
 ```yaml
 memory:
   short_term:
     enabled: true
-    max_entries: 20      # 最大记忆条目数
-    max_history: 10      # 最大对话历史数
+    max_entries: 20
+    max_history: 10
 ```
 
 ### 长期记忆
 
-长期记忆使用向量数据库（ChromaDB）实现持久化记忆存储：
-- **语义检索**: 基于内容相似度的记忆检索
-- **重要性评分**: 按重要性过滤和排序记忆
-- **类别管理**: 按类别组织记忆
-- **元数据**: 支持自定义元数据存储
+使用 ChromaDB 实现持久化语义检索：
 
-**配置示例**:
 ```yaml
 memory:
   long_term:
@@ -499,80 +358,19 @@ memory:
     retrieval_threshold: 0.7
 ```
 
-### 记忆工具
-
-Agent提供了专门的内存工具，可以通过工具调用与记忆系统交互：
-
-```python
-from agent.tools.memory_tools import MEMORY_TOOLS
-
-# 添加所有记忆工具
-for tool in MEMORY_TOOLS:
-    agent.add_tool(tool)
-```
-
-可用工具：
-1. **`remember`** - 记住重要信息到长期记忆
-2. **`recall`** - 从记忆中回忆相关信息
-3. **`list_memories`** - 列出记忆系统中的记忆
-4. **`forget`** - 忘记指定的记忆
-5. **`memory_stats`** - 获取记忆系统的统计信息
-
-### 使用示例
-
-```python
-from agent.core.agent import Agent
-from agent.llm.deepseek import DeepSeekLLM
-from agent.tools.memory_tools import MEMORY_TOOLS
-
-# 创建Agent
-llm = DeepSeekLLM()
-agent = Agent(llm=llm)
-
-# 添加记忆工具
-for tool in MEMORY_TOOLS:
-    agent.add_tool(tool)
-
-# 运行Agent - 它会自动使用记忆系统
-response = agent.run("请记住我喜欢Python编程")
-print(response)
-
-# 回忆相关信息
-response = agent.run("回忆一下我喜欢的编程语言")
-print(response)
-
-# 查看记忆统计
-response = agent.run("查看记忆统计信息")
-print(response)
-```
-
-### 记忆检索策略
-
-Agent在感知阶段会自动检索相关记忆：
-1. **短期记忆检索**: 基于关键词匹配的相关记忆
-2. **长期记忆检索**: 基于语义相似度的向量检索
-3. **工作记忆**: 当前任务的上下文信息
-
-### 记忆存储策略
-
-Agent在执行结束后会自动存储重要记忆：
-1. **短期记忆存储**: 所有对话历史和重要交互
-2. **长期记忆存储**: 基于重要性启发式的重要信息
-3. **自动摘要**: 对话历史的自动摘要生成
-
 ## 学习路径
 
-### 阶段1：基础Agent框架
-- 理解感知-思考-执行循环
-- 掌握LLM集成
-- 学习工具系统设计
+### 阶段1：基础Agent框架 ✅
+- 感知-思考-执行循环
+- LLM集成
+- 工具系统设计
 
 ### 阶段2：记忆系统 ✅
-- 实现短期和长期记忆 ✅
-- 学习向量数据库集成 ✅
-- 掌握记忆检索策略 ✅
+- 短期和长期记忆实现
+- 向量数据库集成
+- 记忆检索策略
 
-### 阶段3：高级功能
+### 阶段3：高级功能 ✅
 - 任务规划和分解
 - 反思和自我改进
 - 多Agent协作

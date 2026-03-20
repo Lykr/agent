@@ -2,17 +2,21 @@
 Agent 核心类
 
 实现感知-思考-执行循环，协调各个模块工作。
+支持任务规划、反思和多Agent协作等高级功能。
 """
 
 import json
 import time
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from .config import get_config, AgentConfig
+from .config import AgentConfig, get_config
 from .state import StateManager
 from ..llm import BaseLLM
+from ..modules.coordination import AgentRole, CoordinationStrategy, MultiAgentCoordinator
+from ..modules.memory import LongTermMemory, ShortTermMemory
+from ..modules.reasoning import ReflectionEngine, TaskPlanner
+from ..modules.reasoning.reflection import TaskExecutionRecord
 from ..tools import BaseTool
-from ..modules.memory import ShortTermMemory, LongTermMemory
 
 
 class Agent:
@@ -23,7 +27,10 @@ class Agent:
         llm: BaseLLM,
         config: Optional[Union[AgentConfig, str]] = None,
         tools: Optional[List[BaseTool]] = None,
-        on_log: Optional[Callable[[str, str], None]] = None
+        on_log: Optional[Callable[[str, str], None]] = None,
+        enable_planning: Optional[bool] = None,
+        enable_reflection: Optional[bool] = None,
+        enable_multi_agent: bool = False,
     ):
         """
         初始化Agent
@@ -32,6 +39,10 @@ class Agent:
             llm: LLM实例
             config: 配置对象或配置文件路径
             tools: 工具列表
+            on_log: 日志回调
+            enable_planning: 是否启用任务规划（覆盖配置）
+            enable_reflection: 是否启用反思（覆盖配置）
+            enable_multi_agent: 是否启用多Agent协作
         """
         # 配置管理
         if isinstance(config, str):
@@ -65,6 +76,29 @@ class Agent:
         if tools:
             for tool in tools:
                 self.add_tool(tool)
+
+        # 功能开关（参数优先，否则读配置）
+        self.enable_planning = enable_planning if enable_planning is not None else self.config.enable_planning
+        self.enable_reflection = enable_reflection if enable_reflection is not None else self.config.enable_reflection
+        self.enable_multi_agent = enable_multi_agent
+
+        # 高级模块（按需初始化）
+        self.task_planner: Optional[TaskPlanner] = None
+        self.reflection_engine: Optional[ReflectionEngine] = None
+        self.multi_agent_coordinator: Optional[MultiAgentCoordinator] = None
+
+        if self.enable_planning:
+            self.task_planner = TaskPlanner(llm=llm)
+
+        if self.enable_reflection:
+            self.reflection_engine = ReflectionEngine(llm=llm, memory_system=self.long_term_memory)
+
+        if self.enable_multi_agent:
+            self.multi_agent_coordinator = MultiAgentCoordinator(strategy=CoordinationStrategy.HIERARCHICAL)
+
+        # 任务执行历史
+        self.task_history: List[Dict[str, Any]] = []
+        self.current_task_record: Optional[Dict[str, Any]] = None
 
         # 系统提示词
         self.system_prompt = self._build_system_prompt()
@@ -263,7 +297,6 @@ class Agent:
 
     def _extract_tool_call(self, response: str) -> Optional[Dict[str, str]]:
         """从回复中提取工具调用"""
-        # 简单的JSON提取逻辑
         import re
 
         # 查找JSON代码块
@@ -351,17 +384,8 @@ class Agent:
         final_response = self._think(follow_up_messages)
         return final_response
 
-    def run(self, user_input: str, max_steps: Optional[int] = None) -> str:
-        """
-        运行Agent
-
-        Args:
-            user_input: 用户输入
-            max_steps: 最大执行步骤数，如果为None则使用配置中的值
-
-        Returns:
-            Agent的回复
-        """
+    def _run_loop(self, user_input: str, max_steps: Optional[int] = None) -> str:
+        """核心感知-思考-执行循环"""
         if max_steps is None:
             max_steps = self.config.max_steps
 
@@ -369,7 +393,6 @@ class Agent:
         self.state_manager.state.add_message("user", user_input)
         self._update_conversation_history("user", user_input)
 
-        # 开始运行
         self.state_manager.start()
         self.state_manager.clear_error()
 
@@ -390,7 +413,6 @@ class Agent:
                 # 检查是否需要执行工具
                 tool_call = self._extract_tool_call(llm_response)
                 if not tool_call:
-                    # 没有工具调用，直接返回思考结果
                     self._log("执行", "无工具调用，跳过执行阶段")
                     self.state_manager.state.add_message("assistant", llm_response)
                     self._update_conversation_history("assistant", llm_response)
@@ -428,8 +450,175 @@ class Agent:
             return error_msg
 
         finally:
-            # 停止运行
             self.state_manager.stop()
+
+    def run(self, user_input: str, max_steps: Optional[int] = None) -> str:
+        """
+        运行Agent
+
+        Args:
+            user_input: 用户输入
+            max_steps: 最大执行步骤数，如果为None则使用配置中的值
+
+        Returns:
+            Agent的回复
+        """
+        if self.enable_planning and self.task_planner is not None:
+            return self._run_with_planning(user_input, max_steps)
+
+        if self.enable_reflection and self.reflection_engine is not None:
+            return self._run_with_reflection(user_input, max_steps)
+
+        return self._run_loop(user_input, max_steps)
+
+    def _run_with_planning(self, user_input: str, max_steps: Optional[int] = None) -> str:
+        """将输入分解为子任务后逐步执行"""
+        self._log("规划", f"开始规划任务: {user_input[:80]}")
+        available_tools = list(self.tools.keys())
+        task_plan = self.task_planner.create_plan_from_llm(user_input, available_tools)
+        self._log("规划", f"生成计划 {task_plan.task_id}，共 {len(task_plan.subtasks)} 个子任务")
+
+        subtask_results: List[str] = []
+        start_time = time.time()
+
+        for subtask in task_plan.subtasks:
+            # 检查依赖是否满足
+            if subtask not in task_plan.get_ready_subtasks():
+                self._log("规划", f"子任务 {subtask.id} 依赖未满足，跳过")
+                task_plan.mark_subtask_failed(subtask.id, "依赖未满足")
+                subtask_results.append(f"[{subtask.id}] 依赖未满足，已跳过")
+                continue
+
+            self._log("规划", f"执行子任务 {subtask.id}: {subtask.description}")
+            task_plan.mark_subtask_started(subtask.id)
+
+            result = self._run_loop(subtask.description, max_steps)
+
+            task_plan.mark_subtask_completed(subtask.id, result)
+            subtask_results.append(f"[{subtask.id}] {subtask.description}\n{result}")
+            self._log("规划", f"子任务 {subtask.id} 完成")
+
+        record = {
+            "task_id": task_plan.task_id,
+            "task_description": user_input,
+            "subtask_count": len(task_plan.subtasks),
+            "duration": time.time() - start_time,
+            "status": task_plan.status.value,
+        }
+        self.task_history.append(record)
+        self.current_task_record = record
+
+        if self.enable_reflection and self.reflection_engine is not None:
+            self._reflect_on_execution(record, subtask_results)
+
+        summary = f"任务规划执行完成（{len(subtask_results)} 个子任务）：\n\n"
+        summary += "\n\n---\n\n".join(subtask_results)
+        return summary
+
+    def _run_with_reflection(self, user_input: str, max_steps: Optional[int] = None) -> str:
+        """执行并在完成后触发反思"""
+        start_time = time.time()
+        result = self._run_loop(user_input, max_steps)
+
+        record = {
+            "task_id": f"task_{int(start_time)}",
+            "task_description": user_input,
+            "subtask_count": 1,
+            "duration": time.time() - start_time,
+            "status": "completed",
+        }
+        self.task_history.append(record)
+        self.current_task_record = record
+
+        self._reflect_on_execution(record, [result])
+        return result
+
+    def _reflect_on_execution(self, record: Dict[str, Any], results: List[str]) -> None:
+        """对本次执行进行反思"""
+        exec_record = TaskExecutionRecord(
+            task_id=record["task_id"],
+            task_description=record["task_description"],
+            start_time=time.time() - record["duration"],
+            end_time=time.time(),
+            steps_taken=record["subtask_count"],
+            successful_steps=record["subtask_count"],
+            tools_used=list(self.tools.keys()),
+            final_result=results[-1] if results else ""
+        )
+
+        insights = self.reflection_engine.analyze_task_execution(exec_record)
+        self._log("反思", f"生成 {len(insights)} 条反思见解")
+        for insight in insights:
+            self._log("反思", f"[{insight.reflection_type.value}] {insight.insight}")
+
+    def run_with_coordination(self, user_input: str, other_agents: List[Dict[str, Any]] = None) -> str:
+        """
+        使用多Agent协作运行
+
+        Args:
+            user_input: 用户输入
+            other_agents: 其他Agent信息列表
+
+        Returns:
+            协调执行结果
+        """
+        if not self.enable_multi_agent or self.multi_agent_coordinator is None:
+            self._log("协作", "多Agent协作未启用，使用单Agent模式")
+            return self.run(user_input)
+
+        self._log("协作", f"开始多Agent协作任务: {user_input}")
+
+        # 注册其他Agent（如果提供）
+        if other_agents:
+            for agent_info in other_agents:
+                agent_id = agent_info.get("id", f"agent_{len(self.multi_agent_coordinator.agents)}")
+                role = AgentRole(agent_info.get("role", "executor"))
+                capabilities = agent_info.get("capabilities", [])
+                self.multi_agent_coordinator.register_agent(agent_id, role, capabilities)
+
+        # 注册自己
+        self.multi_agent_coordinator.register_agent(
+            agent_id="main_agent",
+            role=AgentRole.COORDINATOR,
+            capabilities=list(self.tools.keys())
+        )
+
+        # 创建任务分解
+        if self.enable_planning and self.task_planner is not None:
+            available_tools = list(self.tools.keys())
+            task_plan = self.task_planner.create_plan_from_llm(user_input, available_tools)
+
+            subtasks = [
+                {
+                    "task_id": task_plan.task_id,
+                    "subtask_id": subtask.id,
+                    "description": subtask.description,
+                    "required_capabilities": subtask.required_tools,
+                }
+                for subtask in task_plan.subtasks
+            ]
+
+            result = self.multi_agent_coordinator.coordinate_complex_task(user_input, subtasks)
+
+            final_response = "多Agent协作任务完成！\n\n"
+            final_response += f"成功率: {result['success_rate']:.1%}\n"
+            final_response += f"总子任务数: {result['total_subtasks']}\n"
+            final_response += f"成功数: {result['successful_subtasks']}\n\n"
+
+            for subtask_id, subtask_result in result['results'].items():
+                status = "✅" if subtask_result['success'] else "❌"
+                final_response += f"{status} {subtask_id}: {subtask_result.get('result', '无结果')[:100]}...\n"
+
+            return final_response
+        else:
+            subtasks = [{
+                "task_id": f"task_{int(time.time())}",
+                "subtask_id": "subtask_1",
+                "description": user_input,
+                "required_capabilities": [],
+            }]
+            result = self.multi_agent_coordinator.coordinate_complex_task(user_input, subtasks)
+            return f"协作任务完成: {result}"
 
     def drain_logs(self) -> list:
         """取出并清空运行日志"""
@@ -437,20 +626,35 @@ class Agent:
 
     def get_state(self) -> Dict[str, Any]:
         """获取当前状态信息"""
-        return {
+        state = {
             "config": self.config.model_dump(),
             "state": self.state_manager.state.to_dict(),
             "tools": list(self.tools.keys()),
             "system_prompt_length": len(self.system_prompt),
             "short_term_memory": self.short_term_memory.to_dict(),
             "long_term_memory": self.long_term_memory.get_statistics(),
+            "enable_planning": self.enable_planning,
+            "enable_reflection": self.enable_reflection,
+            "enable_multi_agent": self.enable_multi_agent,
         }
+
+        if self.multi_agent_coordinator:
+            state["multi_agent_status"] = self.multi_agent_coordinator.get_system_status()
+
+        return state
 
     def reset(self, clear_history: bool = False) -> None:
         """重置Agent状态"""
         self.state_manager.reset(clear_history=clear_history)
         if clear_history:
             self.short_term_memory.reset()
+            self.task_history.clear()
+            if self.reflection_engine:
+                self.reflection_engine.reflection_history.clear()
+            if self.multi_agent_coordinator:
+                self.multi_agent_coordinator.reset()
+
+        self.current_task_record = None
 
     def __str__(self) -> str:
         """字符串表示"""
@@ -472,45 +676,3 @@ class SimpleAgent(Agent):
     def chat(self, message: str) -> str:
         """简化聊天接口"""
         return self.run(message)
-
-
-if __name__ == "__main__":
-    # 测试代码
-    print("Agent核心类测试")
-
-    # 创建测试LLM
-    class TestLLM(BaseLLM):
-        def generate(self, messages, **kwargs):
-            return "这是一个测试回复。"
-
-        def chat(self, message, **kwargs):
-            return f"收到: {message}"
-
-        def get_model_info(self):
-            return {"model": "test"}
-
-    # 创建测试工具
-    class TestTool(BaseTool):
-        @property
-        def name(self):
-            return "test_tool"
-
-        @property
-        def description(self):
-            return "测试工具，用于测试"
-
-        def execute(self, input_text):
-            return f"测试工具执行结果: {input_text}"
-
-    # 测试Agent
-    llm = TestLLM()
-    tool = TestTool()
-    agent = Agent(llm=llm, tools=[tool])
-
-    print(f"创建Agent: {agent}")
-    print(f"Agent状态: {agent.get_state()}")
-
-    # 测试运行
-    response = agent.run("你好，测试一下")
-    print(f"Agent回复: {response}")
-    print(f"运行后状态: {agent.get_state()}")
